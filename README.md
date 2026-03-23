@@ -8,11 +8,7 @@ $ uso work
 -> codex:  work  [~/.codex-accounts/work]
 ```
 
-One command switches all your AI CLI tools — Claude Code, Codex, and anything else with file-based config — to the same profile. Each profile carries its own env vars, API keys, and settings. No dependencies, just shell.
-
-## Why
-
-If you freelance, consult, or just keep work and personal separate, you need different API keys, MCP servers, and settings for each context. Today that means logging out and back in, or juggling shell aliases. uso makes it one command.
+One command switches all your AI CLI tools — Claude Code, Codex, and anything else with file-based config — to the same profile. Each profile carries its own env vars, API keys, and settings. Single binary, no runtime dependencies.
 
 ## Install
 
@@ -23,23 +19,22 @@ brew tap bejoinka/tap
 brew install uso
 ```
 
-Then add to your `~/.zshrc` or `~/.bashrc`:
+**Go:**
 
 ```sh
-source "$(brew --prefix)/share/uso/uso.sh"
+go install github.com/bejoinka/uso@latest
 ```
 
-**curl:**
+Then add to your `~/.zshrc`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/bejoinka/uso/main/install.sh | sh
+eval "$(uso hook zsh)"
 ```
 
-**Manual:**
+Or `~/.bashrc`:
 
 ```sh
-git clone https://github.com/bejoinka/uso.git ~/.local/share/uso
-echo 'source ~/.local/share/uso/uso.sh' >> ~/.zshrc
+eval "$(uso hook bash)"
 ```
 
 ## Quick Start
@@ -82,18 +77,18 @@ uso personal
 
 ## How It Works
 
-When you run `uso work`:
+`eval "$(uso hook zsh)"` in your shell rc installs a thin wrapper function. When you run `uso work`, the binary:
 
 1. Switches each registered tool's symlink to the profile's config dir
-2. Exports all env vars defined in the profile
-3. Applies `USO_COLOR` (iTerm tab) and `USO_TITLE` (terminal title) if set
-4. Runs the post-switch hook if one exists
+2. Outputs `export` statements for the profile's env vars
+3. Applies `USO_COLOR` (iTerm tab) and `USO_TITLE` (terminal title)
+4. The shell wrapper evals all of this into your session
 
-On shell startup, uso restores the last active profile.
+On shell startup, the hook restores the last active profile.
 
 ## Profile Config
 
-Profiles store env vars in `~/.config/uso/profiles/<name>.conf` as KEY=VALUE pairs. All keys are exported on switch. Two special keys get visual treatment:
+Profiles store env vars as KEY=VALUE pairs. All keys are exported on switch. Two special keys get visual treatment:
 
 | Key | Effect |
 |-----|--------|
@@ -117,29 +112,23 @@ uso set work NODE_ENV "development"
 | Claude Code | `CLAUDE_CONFIG_DIR` | `~/.claude` |
 | Codex CLI | `CODEX_HOME` | `~/.codex` |
 
-Add custom tools with `uso add-tool`:
+Add custom tools:
 
 ```sh
 uso add-tool gemini GEMINI_CONFIG_DIR ~/.gemini ~/.gemini-accounts
-uso add-tool cursor CURSOR_CONFIG_DIR ~/.cursor ~/.cursor-accounts
 ```
 
 ## Hooks
 
 Create `~/.config/uso/post-switch` (chmod +x) to run custom logic after every switch. Receives the profile name as `$1`.
 
-See [examples/post-switch](examples/post-switch) for an example with iTerm tab colors.
-
 ## Migrating Existing Configs
 
 If your tool's config is a real directory (not a symlink yet):
 
 ```sh
-# Copy existing config to "home" profile
 mkdir -p ~/.claude-accounts/home
 cp -a ~/.claude/* ~/.claude-accounts/home/
-
-# Replace with symlink
 mv ~/.claude ~/.claude.bak
 ln -sfn ~/.claude-accounts/home ~/.claude
 ```
@@ -148,23 +137,10 @@ ln -sfn ~/.claude-accounts/home ~/.claude
 
 Lowercase alphanumeric and hyphens only. Max 32 characters.
 
-```
-work           # ok
-my-client      # ok
-Client A       # invalid
-```
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `USO_DIR` | `~/.config/uso` | Where uso stores its config |
-| `USO_PROFILE` | _(set on switch)_ | Active profile name |
-
 ## Requirements
 
-- bash 4+ or zsh 5+
-- No external dependencies
+- macOS or Linux
+- zsh or bash
 
 ## License
 
