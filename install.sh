@@ -5,14 +5,16 @@ USO_INSTALL_DIR="${USO_INSTALL_DIR:-$HOME/.local/share/uso}"
 
 echo "Installing uso to $USO_INSTALL_DIR..."
 
-if [ -d "$USO_INSTALL_DIR" ]; then
-  echo "Updating existing installation..."
-  cd "$USO_INSTALL_DIR" && git pull
+if [ -d "$USO_INSTALL_DIR/.git" ]; then
+  cd "$USO_INSTALL_DIR" && git pull --quiet
+  echo "Updated."
 else
-  git clone https://github.com/bejoinka/uso.git "$USO_INSTALL_DIR"
+  rm -rf "$USO_INSTALL_DIR"
+  git clone --quiet https://github.com/bejoinka/uso.git "$USO_INSTALL_DIR"
+  echo "Cloned."
 fi
 
-# Detect shell rc file
+# Detect shell rc
 SHELL_RC=""
 if [ -f "$HOME/.zshrc" ]; then
   SHELL_RC="$HOME/.zshrc"
@@ -28,10 +30,9 @@ if [ -n "$SHELL_RC" ]; then
     echo "Already sourced in $SHELL_RC"
   fi
 else
-  echo "Add this to your shell rc file:"
+  echo "Add to your shell rc:"
   echo "  source \"$USO_INSTALL_DIR/uso.sh\""
 fi
 
 echo ""
-echo "Done! Restart your shell, then run:"
-echo "  uso init"
+echo "Restart your shell, then run: uso init"
