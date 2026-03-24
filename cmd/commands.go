@@ -16,6 +16,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// 1. Pick tools
 	known := config.KnownTools()
 	labels := make([]string, len(known))
 	for i, t := range known {
@@ -27,8 +28,23 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
 	fmt.Println()
+
+	// 2. Ask for default profile name
+	defaultProfile := "home"
+	fmt.Printf("Default profile name [%s]: ", defaultProfile)
+	var input string
+	fmt.Scanln(&input)
+	input = strings.TrimSpace(input)
+	if input != "" {
+		if !config.ValidName(input) {
+			return fmt.Errorf("invalid name '%s' (lowercase alphanumeric + hyphens, max 32)", input)
+		}
+		defaultProfile = input
+	}
+	fmt.Println()
+
+	// 3. Register tools and migrate existing configs
 	for _, idx := range selected {
 		t := known[idx]
 		if err := config.SaveTool(t.ID, config.Tool{
@@ -38,9 +54,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}); err != nil {
 			return err
 		}
-		os.MkdirAll(filepath.Join(t.AccountsDir, "home"), 0755)
-		fmt.Printf("  + %s\n", t.Label)
+
+		result := config.MigrateTool(t.ID, t.Symlink, t.AccountsDir, defaultProfile)
+		if result.Error != nil {
+			fmt.Printf("  ! %s: %s\n", t.Label, result.Error)
+		} else if result.Copied {
+			fmt.Printf("  + %s (migrated %s -> %s/%s/)\n", t.Label, t.Symlink, t.AccountsDir, defaultProfile)
+		} else if result.WasSymlink {
+			fmt.Printf("  + %s (already a symlink)\n", t.Label)
+		} else {
+			fmt.Printf("  + %s\n", t.Label)
+		}
 	}
+
+	// Set default profile as current
+	config.SetCurrentProfile(defaultProfile)
 
 	fmt.Println()
 	fmt.Println("Next: uso add-profile <name>")
@@ -147,7 +175,7 @@ func runAddProfile(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("\nProfile '%s' ready. Configure:\n", profile)
 	fmt.Printf("  uso set %s USO_TITLE \"%s\"\n", profile, profile)
-	fmt.Printf("  uso set %s USO_COLOR \"R,G,B\"\n", profile)
+	fmt.Printf("  uso set %s USO_COLOR blue    # or: red, orange, teal, purple, 0,168,120\n", profile)
 	return nil
 }
 
@@ -161,6 +189,15 @@ func runSet(cmd *cobra.Command, args []string) error {
 
 	if profile != "home" && !config.ProfileExists(profile) {
 		return fmt.Errorf("profile '%s' not found", profile)
+	}
+
+	// Resolve named colors for USO_COLOR
+	if key == "USO_COLOR" && value != "" {
+		resolved, err := config.ResolveColor(value)
+		if err != nil {
+			return err
+		}
+		value = resolved
 	}
 
 	if err := config.SetProfileKey(profile, key, value); err != nil {
