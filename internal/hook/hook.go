@@ -9,6 +9,12 @@ import (
 	"github.com/bejoinka/uso/internal/config"
 )
 
+// shellEscape escapes a string for safe use in single-quoted shell context.
+// Replaces ' with '\'' (end quote, escaped quote, start quote).
+func shellEscape(s string) string {
+	return strings.ReplaceAll(s, "'", `'\''`)
+}
+
 // Zsh outputs the shell code for eval "$(uso hook zsh)".
 func Zsh() string {
 	return shellHook("zsh")
@@ -120,17 +126,17 @@ func EvalSwitch(profile string) (string, error) {
 			continue
 		}
 
-		fmt.Fprintf(&b, "export %s='%s'\n", t.EnvVar, profileDir)
-		fmt.Fprintf(&b, "echo '-> %s: %s  [%s]'\n", name, profile, profileDir)
+		fmt.Fprintf(&b, "export %s='%s'\n", t.EnvVar, shellEscape(profileDir))
+		fmt.Fprintf(&b, "echo '-> %s: %s  [%s]'\n", shellEscape(name), shellEscape(profile), shellEscape(profileDir))
 	}
 
 	// Export profile env vars
 	env, _ := config.LoadProfileEnv(profile)
 	for _, kv := range env {
-		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], kv[1])
+		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], shellEscape(kv[1]))
 	}
 
-	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", profile)
+	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", shellEscape(profile))
 
 	// Built-in: iTerm tab color
 	for _, kv := range env {
@@ -157,7 +163,7 @@ func EvalSwitch(profile string) (string, error) {
 	// Post-switch hook
 	hookPath := filepath.Join(config.Dir(), "post-switch")
 	if info, err := os.Stat(hookPath); err == nil && info.Mode()&0111 != 0 {
-		fmt.Fprintf(&b, "'%s' '%s'\n", hookPath, profile)
+		fmt.Fprintf(&b, "'%s' '%s'\n", shellEscape(hookPath), shellEscape(profile))
 	}
 
 	return b.String(), nil
@@ -173,7 +179,7 @@ func EvalRestore() (string, error) {
 	current := config.CurrentProfile()
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", current)
+	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", shellEscape(current))
 
 	for _, t := range tools {
 		profileDir := filepath.Join(t.AccountsDir, current)
@@ -183,14 +189,14 @@ func EvalRestore() (string, error) {
 				os.Remove(t.Symlink)
 				os.Symlink(profileDir, t.Symlink)
 			}
-			fmt.Fprintf(&b, "export %s='%s'\n", t.EnvVar, profileDir)
+			fmt.Fprintf(&b, "export %s='%s'\n", t.EnvVar, shellEscape(profileDir))
 		}
 	}
 
 	// Restore profile env vars
 	env, _ := config.LoadProfileEnv(current)
 	for _, kv := range env {
-		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], kv[1])
+		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], shellEscape(kv[1]))
 	}
 
 	// Apply visuals silently
