@@ -109,11 +109,10 @@ func EvalSwitch(profile string) (string, error) {
 	}
 
 	// Validate profile
-	if profile != "home" && !config.ProfileExists(profile) {
+	if !config.ProfileExists(profile) {
 		profiles, _ := config.ListProfiles()
-		all := append([]string{"home"}, profiles...)
 		return fmt.Sprintf(`echo "uso: unknown profile '%s'" >&2; echo "  profiles: %s" >&2`,
-			profile, strings.Join(all, " ")), nil
+			profile, strings.Join(profiles, " ")), nil
 	}
 
 	var b strings.Builder

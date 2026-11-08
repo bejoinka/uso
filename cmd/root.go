@@ -176,7 +176,6 @@ var completionsProfilesCmd = &cobra.Command{
 	Short:  "List profile names for completion",
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("home")
 		profiles, _ := config.ListProfiles()
 		for _, p := range profiles {
 			fmt.Println(p)

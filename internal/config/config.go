@@ -2,9 +2,11 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -156,30 +158,59 @@ func LoadProfileEnv(profile string) ([][2]string, error) {
 	return pairs, nil
 }
 
-// ProfileExists checks if a profile config file exists.
+// ProfileExists reports whether a profile has a config file or a directory
+// in any registered tool's accounts directory.
 func ProfileExists(name string) bool {
-	_, err := os.Stat(filepath.Join(Dir(), "profiles", name+".conf"))
-	return err == nil
+	if !ValidName(name) {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(Dir(), "profiles", name+".conf")); err == nil {
+		return true
+	}
+	tools, _ := LoadTools()
+	for _, t := range tools {
+		if info, err := os.Stat(filepath.Join(t.AccountsDir, name)); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
-// ListProfiles returns all registered profile names.
+// ListProfiles returns the sorted names of all profiles: every name with a
+// config file or a directory in a registered tool's accounts directory.
 func ListProfiles() ([]string, error) {
-	dir := filepath.Join(Dir(), "profiles")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
+	seen := map[string]bool{}
+
+	confs, err := os.ReadDir(filepath.Join(Dir(), "profiles"))
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-
-	var names []string
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".conf") {
-			names = append(names, strings.TrimSuffix(e.Name(), ".conf"))
+	for _, e := range confs {
+		if name, ok := strings.CutSuffix(e.Name(), ".conf"); ok && ValidName(name) {
+			seen[name] = true
 		}
 	}
-	return names, nil
+
+	tools, err := LoadTools()
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range tools {
+		dirs, err := os.ReadDir(t.AccountsDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		for _, e := range dirs {
+			if e.IsDir() && ValidName(e.Name()) {
+				seen[e.Name()] = true
+			}
+		}
+	}
+
+	return slices.Sorted(maps.Keys(seen)), nil
 }
 
 // SetProfileKey upserts a key in a profile conf. Empty value removes the key.

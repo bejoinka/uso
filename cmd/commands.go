@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,8 +46,23 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// 3. Register tools and migrate existing configs
-	for _, idx := range selected {
-		t := known[idx]
+	tools := make([]config.KnownTool, len(selected))
+	for i, idx := range selected {
+		tools[i] = known[idx]
+	}
+	if err := applyInit(cmd.OutOrStdout(), tools, defaultProfile); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("Next: uso add-profile <name>")
+	return nil
+}
+
+// applyInit registers the chosen tools, migrates their existing config into
+// the default profile, and makes that profile the current one.
+func applyInit(out io.Writer, tools []config.KnownTool, defaultProfile string) error {
+	for _, t := range tools {
 		if err := config.SaveTool(t.ID, config.Tool{
 			EnvVar:      t.EnvVar,
 			Symlink:     t.Symlink,
@@ -57,22 +73,24 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 		result := config.MigrateTool(t.ID, t.Symlink, t.AccountsDir, defaultProfile)
 		if result.Error != nil {
-			fmt.Printf("  ! %s: %s\n", t.Label, result.Error)
+			fmt.Fprintf(out, "  ! %s: %s\n", t.Label, result.Error)
 		} else if result.Copied {
-			fmt.Printf("  + %s (migrated %s -> %s/%s/)\n", t.Label, t.Symlink, t.AccountsDir, defaultProfile)
+			fmt.Fprintf(out, "  + %s (migrated %s -> %s/%s/)\n", t.Label, t.Symlink, t.AccountsDir, defaultProfile)
 		} else if result.WasSymlink {
-			fmt.Printf("  + %s (already a symlink)\n", t.Label)
+			fmt.Fprintf(out, "  + %s (already a symlink)\n", t.Label)
 		} else {
-			fmt.Printf("  + %s\n", t.Label)
+			fmt.Fprintf(out, "  + %s\n", t.Label)
 		}
 	}
 
-	// Set default profile as current
-	config.SetCurrentProfile(defaultProfile)
-
-	fmt.Println()
-	fmt.Println("Next: uso add-profile <name>")
-	return nil
+	registered, err := config.LoadTools()
+	if err != nil {
+		return err
+	}
+	if err := config.EnsureProfileDir(defaultProfile, registered); err != nil {
+		return err
+	}
+	return config.SetCurrentProfile(defaultProfile)
 }
 
 func runList(cmd *cobra.Command, args []string) error {
@@ -89,9 +107,9 @@ func runList(cmd *cobra.Command, args []string) error {
 		return "  "
 	}
 
-	fmt.Printf("%shome\n", marker("home"))
+	out := cmd.OutOrStdout()
 	for _, p := range profiles {
-		fmt.Printf("%s%s\n", marker(p), p)
+		fmt.Fprintf(out, "%s%s\n", marker(p), p)
 	}
 	return nil
 }
@@ -148,8 +166,17 @@ func runAddTool(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	os.MkdirAll(filepath.Join(accountsDir, "home"), 0755)
-	fmt.Printf("Added tool: %s ($%s -> %s)\n", name, envVar, symlink)
+	// Give the tool a directory in every existing profile
+	profiles, err := config.ListProfiles()
+	if err != nil {
+		return err
+	}
+	for _, p := range profiles {
+		if err := os.MkdirAll(filepath.Join(accountsDir, p), 0755); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Added tool: %s ($%s -> %s)\n", name, envVar, symlink)
 	return nil
 }
 
@@ -187,7 +214,7 @@ func runSet(cmd *cobra.Command, args []string) error {
 		value = strings.Join(args[2:], " ")
 	}
 
-	if profile != "home" && !config.ProfileExists(profile) {
+	if !config.ProfileExists(profile) {
 		return fmt.Errorf("profile '%s' not found", profile)
 	}
 
@@ -218,7 +245,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		profile = args[0]
 	}
 
-	if profile != "home" && !config.ProfileExists(profile) {
+	if !config.ProfileExists(profile) {
 		return fmt.Errorf("profile '%s' not found", profile)
 	}
 
