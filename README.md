@@ -152,6 +152,8 @@ cp ~/.claude-accounts/home/settings.json ~/.claude-accounts/work/
 cp ~/.claude-accounts/home/CLAUDE.md     ~/.claude-accounts/work/
 ```
 
+To keep a profile's settings, skills, plugins and memory in step with another's instead, share them. See [Sharing between profiles](#sharing-between-profiles).
+
 ### 4. Add environment variables (optional)
 
 Each profile can export its own variables when you switch to it:
@@ -194,12 +196,13 @@ Named colors: `red`, `orange`, `yellow`, `green`, `teal`, `blue`, `indigo`, `pur
 |---------|-------------|
 | `uso <profile>` | Switch to a profile |
 | `uso` | Print the profile you switched to most recently, in any terminal |
-| `uso list` (or `uso ls`) | List profiles. `*` marks the most recent one and `(default)` marks your default profile |
+| `uso list` (or `uso ls`) | List profiles. `*` marks the most recent one, `(default)` your default profile, and `(shares awell)` a profile that shares with awell |
 | `uso status` | Show the current profile, its variables, and where each tool's symlink points |
 | `uso show [profile]` | Show a profile's variables. Defaults to the current profile |
 | `uso set <profile> <KEY> <value>` | Set a variable on a profile |
 | `uso set <profile> <KEY>` | Remove a variable from a profile |
 | `uso add-profile <name>` | Create a profile. Safe to rerun on an existing profile |
+| `uso add-profile <name> --share <profile>` | Create or convert a profile that shares everything but the login with another. See [Sharing between profiles](#sharing-between-profiles) |
 | `uso add-tool <name> <ENV_VAR> <default-dir> <accounts-dir>` | Register another tool. See [Adding other tools](#adding-other-tools) |
 | `uso init` | Run the interactive setup |
 | `uso hook zsh` / `uso hook bash` | Print the shell hook. Used by the line in your rc file |
@@ -223,6 +226,54 @@ Some of what `uso work` changes applies only to the terminal you ran it in, and 
 - **Every terminal:** the `~/.claude` and `~/.codex` symlinks, and the record of your most recent profile. A new terminal opens in the profile you switched to last. Programs that don't start from your shell, such as IDE extensions and desktop apps, follow the symlink.
 
 Setting `USO_COLOR` and `USO_TITLE` makes it easy to tell terminals apart.
+
+## Sharing between profiles
+
+Two profiles can share everything except the login. For example, two accounts can work on the same repositories with one memory:
+
+```sh
+uso add-profile awell2 --share awell
+```
+
+```
+  claude: ~/.claude-accounts/awell2/
+    shares settings.json, agents, commands, skills, output-styles, projects, plugins with awell
+```
+
+For Claude Code, these items in `awell2` become links to the copies in `awell`:
+
+| Shared | What it holds |
+|--------|---------------|
+| `settings.json`, `CLAUDE.md` | Settings, permissions, hooks, enabled plugins, and your global instructions |
+| `agents/`, `commands/`, `skills/`, `output-styles/` | Your custom agents, slash commands, skills and output styles |
+| `plugins/` | Installed plugins and marketplaces |
+| `projects/` | Memory and session history for each repository. `claude --resume` lists sessions from both profiles |
+
+Each profile keeps its own login and `.claude.json`, which holds the account, user-level MCP servers and trusted folders. It also keeps its organization's managed settings and its runtime state. Log in once in the new profile, and add user-level MCP servers in each profile.
+
+Claude Code keeps memory per repository, in `projects/<repository path>/memory`. Different repositories never share memory, whether or not their profiles share.
+
+`uso list` shows `awell2 (shares awell)`. Running the command again is safe.
+
+### Converting a profile you already use
+
+Run the same command on an existing profile. Close Claude Code in both profiles first. The profile's own files move into the other profile:
+
+- **`agents/`, `commands/`, `skills/`, `output-styles/` and `projects/`** are merged, so both profiles' sessions and memory are kept.
+- **`settings.json`, `CLAUDE.md` and `plugins/`** are not merged: the other profile's copy is kept whole.
+- **Anything only this profile has** moves to the other profile.
+- **Where the two profiles differ,** the other profile's version wins. This profile's version moves to a `uso-backup-*` folder inside this profile, and the output lists each one. Nothing is deleted except identical files and links that point to the same place.
+
+### Notes
+
+- Only Claude Code has shared items so far. Other tools stay separate per profile.
+- Don't delete a profile that others share from (`awell` above). Their links would break.
+- To stop sharing an item, replace the link with a copy:
+
+  ```sh
+  rm ~/.claude-accounts/awell2/skills
+  cp -R ~/.claude-accounts/awell/skills ~/.claude-accounts/awell2/
+  ```
 
 ## Adding other tools
 
