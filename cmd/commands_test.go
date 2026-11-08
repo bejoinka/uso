@@ -68,7 +68,7 @@ func TestInitWithACustomDefaultProfileName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, want := listOutput(t), "* personal\n"; got != want {
+	if got, want := listOutput(t), "* personal (default)\n"; got != want {
 		t.Errorf("uso list = %q, want %q", got, want)
 	}
 	if !config.ProfileExists("personal") {
@@ -143,6 +143,36 @@ func TestInitKeepsAStateFileTheProfileAlreadyHas(t *testing.T) {
 
 	if data, _ := os.ReadFile(inProfile); string(data) != "the profile's own" {
 		t.Errorf("init overwrote the profile's .claude.json with %q", data)
+	}
+}
+
+func TestListMarksTheDefaultProfile(t *testing.T) {
+	useTempConfig(t)
+	if err := applyInit(io.Discard, nil, "home"); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.EnsureProfileDir("work", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.SetCurrentProfile("work"); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := listOutput(t), "  home (default)\n* work\n"; got != want {
+		t.Errorf("uso list = %q, want %q", got, want)
+	}
+}
+
+func TestListTreatsHomeAsTheDefaultOnOlderInstalls(t *testing.T) {
+	useTempConfig(t) // no default profile recorded, as on installs made before it was
+	for _, p := range []string{"home", "work"} {
+		if err := config.EnsureProfileDir(p, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got, want := listOutput(t), "* home (default)\n  work\n"; got != want {
+		t.Errorf("uso list = %q, want %q", got, want)
 	}
 }
 

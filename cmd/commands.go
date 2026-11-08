@@ -55,12 +55,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
+	fmt.Printf("Your existing setup is now the '%s' profile, your default. `uso list` marks it.\n", defaultProfile)
 	fmt.Println("Next: uso add-profile <name>")
 	return nil
 }
 
 // applyInit registers the chosen tools, migrates their existing config into
-// the default profile, and makes that profile the current one.
+// the default profile, and makes that profile the default and current one.
 func applyInit(out io.Writer, tools []config.KnownTool, defaultProfile string) error {
 	for _, t := range tools {
 		if err := config.SaveTool(t.ID, config.Tool{
@@ -100,26 +101,30 @@ func applyInit(out io.Writer, tools []config.KnownTool, defaultProfile string) e
 	if err := config.EnsureProfileDir(defaultProfile, registered); err != nil {
 		return err
 	}
+	if err := config.SetDefaultProfile(defaultProfile); err != nil {
+		return err
+	}
 	return config.SetCurrentProfile(defaultProfile)
 }
 
 func runList(cmd *cobra.Command, args []string) error {
 	current := config.CurrentProfile()
+	defaultProfile := config.DefaultProfile()
 	profiles, err := config.ListProfiles()
 	if err != nil {
 		return err
 	}
 
-	marker := func(name string) string {
-		if name == current {
-			return "* "
-		}
-		return "  "
-	}
-
 	out := cmd.OutOrStdout()
 	for _, p := range profiles {
-		fmt.Fprintf(out, "%s%s\n", marker(p), p)
+		marker, suffix := "  ", ""
+		if p == current {
+			marker = "* "
+		}
+		if p == defaultProfile {
+			suffix = " (default)"
+		}
+		fmt.Fprintf(out, "%s%s%s\n", marker, p, suffix)
 	}
 	return nil
 }

@@ -72,6 +72,24 @@ func SetCurrentProfile(name string) error {
 	return os.WriteFile(filepath.Join(Dir(), "current"), []byte(name+"\n"), 0644)
 }
 
+// DefaultProfile returns the profile that `uso init` moved the existing
+// config into. Installs made before this was recorded used "home".
+func DefaultProfile() string {
+	data, err := os.ReadFile(filepath.Join(Dir(), "default"))
+	if err != nil {
+		return "home"
+	}
+	if s := strings.TrimSpace(string(data)); s != "" {
+		return s
+	}
+	return "home"
+}
+
+// SetDefaultProfile records the default profile.
+func SetDefaultProfile(name string) error {
+	return os.WriteFile(filepath.Join(Dir(), "default"), []byte(name+"\n"), 0644)
+}
+
 // LoadTools reads all registered tools.
 func LoadTools() (map[string]Tool, error) {
 	dir := filepath.Join(Dir(), "tools")
