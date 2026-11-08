@@ -9,10 +9,41 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// rootHelp is printed for `uso`, `uso help`, `uso --help` and `uso -h`. It
+// lists commands as typed through the shell function, not the binary's
+// internal _-prefixed subcommands. The Homebrew formula's test checks for
+// the first line.
+const rootHelp = `Switch AI CLI tool profiles with a single command.
+
+Usage:
+  uso <profile>                      Switch to a profile
+  uso                                Print the profile you switched to most recently
+  uso list                           List profiles
+  uso status                         Show the current profile, its env vars and tool symlinks
+  uso show [profile]                 Show a profile's env vars
+  uso set <profile> <KEY> <value>    Set an env var on a profile
+  uso set <profile> <KEY>            Remove an env var from a profile
+  uso add-profile <name>             Create a profile
+  uso add-tool <name> <ENV_VAR> <default-dir> <accounts-dir>
+                                     Register another tool
+  uso init                           Set up uso and move your existing config into a default profile
+  uso hook zsh|bash                  Print the shell hook
+  uso help                           Show this help
+
+Setup:
+  Add this line to ~/.zshrc (for bash: hook bash, in ~/.bashrc), open a new
+  terminal, and run uso init:
+
+    eval "$(command uso hook zsh)"
+
+More: https://github.com/bejoinka/uso
+`
+
 var rootCmd = &cobra.Command{
 	Use:   "uso",
 	Short: "Switch AI CLI tool profiles with a single command",
-	Long:  "uso manages symlinks and env vars across Claude Code, Codex, and other AI CLI tools.\nSet up with: eval \"$(uso hook zsh)\" in your .zshrc",
+	// Argument errors carry their own usage line; see usageArgs
+	SilenceUsage: true,
 	// If called directly (not via shell wrapper), show help
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
@@ -24,7 +55,7 @@ var rootCmd = &cobra.Command{
 var hookCmd = &cobra.Command{
 	Use:   "hook [zsh|bash]",
 	Short: "Output shell hook for eval",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs(cobra.ExactArgs(1), "uso hook zsh|bash"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		switch args[0] {
 		case "zsh":
@@ -140,28 +171,28 @@ var statusCmd = &cobra.Command{
 var addToolCmd = &cobra.Command{
 	Use:   "_add-tool <name> <env_var> <symlink> <accounts_dir>",
 	Short: "Register a CLI tool",
-	Args:  cobra.ExactArgs(4),
+	Args:  usageArgs(cobra.ExactArgs(4), "uso add-tool <name> <ENV_VAR> <default-dir> <accounts-dir>"),
 	RunE:  runAddTool,
 }
 
 var addProfileCmd = &cobra.Command{
 	Use:   "_add-profile <name>",
 	Short: "Create a profile",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs(cobra.ExactArgs(1), "uso add-profile <name>"),
 	RunE:  runAddProfile,
 }
 
 var setCmd = &cobra.Command{
 	Use:   "_set <profile> <KEY> [value]",
 	Short: "Set/unset env var on a profile",
-	Args:  cobra.MinimumNArgs(2),
+	Args:  usageArgs(cobra.MinimumNArgs(2), "uso set <profile> <KEY> [value]"),
 	RunE:  runSet,
 }
 
 var showCmd = &cobra.Command{
 	Use:   "_show [profile]",
 	Short: "Show profile config",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  usageArgs(cobra.MaximumNArgs(1), "uso show [profile]"),
 	RunE:  runShow,
 }
 
@@ -184,7 +215,30 @@ var completionsProfilesCmd = &cobra.Command{
 	},
 }
 
+// usageArgs wraps an argument check so that its error shows the command as
+// typed through the shell function ("uso set"), not the internal one
+// ("uso _set").
+func usageArgs(check cobra.PositionalArgs, usage string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if check(cmd, args) != nil {
+			return fmt.Errorf("usage: %s", usage)
+		}
+		return nil
+	}
+}
+
 func init() {
+	// Replace the root help, which would list the internal subcommands, but
+	// keep cobra's help for subcommands such as hook.
+	defaultHelp := rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if cmd != rootCmd {
+			defaultHelp(cmd, args)
+			return
+		}
+		fmt.Fprint(cmd.OutOrStdout(), rootHelp)
+	})
+
 	evalCmd.Flags().BoolVar(&evalRestore, "restore", false, "restore last profile")
 
 	completionsCmd.AddCommand(completionsProfilesCmd)
