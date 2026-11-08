@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/bejoinka/uso/internal/config"
 )
 
 func TestShellHookDefinesAWorkingFunction(t *testing.T) {
@@ -35,5 +37,117 @@ func TestShellHookDefinesAWorkingFunction(t *testing.T) {
 				t.Errorf("uso work did not call the binary with 'eval work'; output:\n%s", out)
 			}
 		})
+	}
+}
+
+// setupProfiles points uso at a temp config with one tool and the profiles
+// home, work and personal. work sets ANTHROPIC_API_KEY; personal sets GH_TOKEN.
+func setupProfiles(t *testing.T) {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("USO_DIR", filepath.Join(root, "uso"))
+	t.Setenv("USO_PROFILE", "")
+
+	tools := map[string]config.Tool{"claude": {
+		EnvVar:      "CLAUDE_CONFIG_DIR",
+		Symlink:     filepath.Join(root, ".claude"),
+		AccountsDir: filepath.Join(root, ".claude-accounts"),
+	}}
+	steps := []error{config.EnsureInit(), config.SaveTool("claude", tools["claude"])}
+	for _, p := range []string{"home", "work", "personal"} {
+		steps = append(steps, config.EnsureProfileDir(p, tools))
+	}
+	steps = append(steps,
+		config.SetProfileKey("work", "ANTHROPIC_API_KEY", "sk-work"),
+		config.SetProfileKey("personal", "GH_TOKEN", "gh-personal"),
+	)
+	for _, err := range steps {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestEvalSwitchUnsetsTheVariablesOfThisShellsProfile(t *testing.T) {
+	tests := []struct {
+		name       string
+		usoProfile string // this shell's $USO_PROFILE
+		wantUnset  string
+		wantKept   string
+	}{
+		{
+			name:       "this shell is on work while another terminal last switched to personal",
+			usoProfile: "work",
+			wantUnset:  "ANTHROPIC_API_KEY",
+			wantKept:   "GH_TOKEN",
+		},
+		{
+			name:       "falls back to the last profile when USO_PROFILE is not set",
+			usoProfile: "",
+			wantUnset:  "GH_TOKEN",
+			wantKept:   "ANTHROPIC_API_KEY",
+		},
+		{
+			name:       "falls back to the last profile when USO_PROFILE is not a valid name",
+			usoProfile: "../work",
+			wantUnset:  "GH_TOKEN",
+			wantKept:   "ANTHROPIC_API_KEY",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupProfiles(t)
+			if err := config.SetCurrentProfile("personal"); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("USO_PROFILE", tt.usoProfile)
+
+			out, err := EvalSwitch("home")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out, "unset "+tt.wantUnset) {
+				t.Errorf("expected 'unset %s'; output:\n%s", tt.wantUnset, out)
+			}
+			if strings.Contains(out, "unset "+tt.wantKept) {
+				t.Errorf("did not expect 'unset %s'; output:\n%s", tt.wantKept, out)
+			}
+		})
+	}
+}
+
+func TestEvalRestoreUnsetsAnInheritedProfilesVariables(t *testing.T) {
+	setupProfiles(t)
+	if err := config.SetCurrentProfile("personal"); err != nil {
+		t.Fatal(err)
+	}
+	// A new shell (e.g. a tmux pane) inherited the environment of a shell on work.
+	t.Setenv("USO_PROFILE", "work")
+
+	out, err := EvalRestore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "unset ANTHROPIC_API_KEY") {
+		t.Errorf("expected work's ANTHROPIC_API_KEY to be unset; output:\n%s", out)
+	}
+	if !strings.Contains(out, "export GH_TOKEN='gh-personal'") {
+		t.Errorf("expected personal's GH_TOKEN to be exported; output:\n%s", out)
+	}
+}
+
+func TestEvalRestoreUnsetsNothingWhenAlreadyOnTheProfile(t *testing.T) {
+	setupProfiles(t)
+	if err := config.SetCurrentProfile("personal"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("USO_PROFILE", "personal")
+
+	out, err := EvalRestore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "unset ") {
+		t.Errorf("expected no unset; output:\n%s", out)
 	}
 }

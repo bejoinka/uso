@@ -80,6 +80,24 @@ complete -F _uso_completions_bash uso
 	return b.String()
 }
 
+// shellProfile returns the profile the calling shell is on. That is
+// $USO_PROFILE, which the hook exports, not the last profile used in any
+// terminal; it falls back to the latter if $USO_PROFILE is unset.
+func shellProfile() string {
+	if p := os.Getenv("USO_PROFILE"); config.ValidName(p) {
+		return p
+	}
+	return config.CurrentProfile()
+}
+
+// writeUnsets writes an unset command for each of a profile's env vars.
+func writeUnsets(b *strings.Builder, profile string) {
+	env, _ := config.LoadProfileEnv(profile)
+	for _, kv := range env {
+		fmt.Fprintf(b, "unset %s 2>/dev/null\n", kv[0])
+	}
+}
+
 // EvalSwitch outputs shell commands to switch to a profile.
 func EvalSwitch(profile string) (string, error) {
 	tools, err := config.LoadTools()
@@ -100,13 +118,8 @@ func EvalSwitch(profile string) (string, error) {
 
 	var b strings.Builder
 
-	// Clear previous profile env vars
-	prev := config.CurrentProfile()
-	if prevEnv, _ := config.LoadProfileEnv(prev); len(prevEnv) > 0 {
-		for _, kv := range prevEnv {
-			fmt.Fprintf(&b, "unset %s 2>/dev/null\n", kv[0])
-		}
-	}
+	// Clear the env vars of the profile this shell is on
+	writeUnsets(&b, shellProfile())
 
 	// Switch tool symlinks
 	for name, t := range tools {
@@ -183,6 +196,12 @@ func EvalRestore() (string, error) {
 
 	current := config.CurrentProfile()
 	var b strings.Builder
+
+	// A new shell can inherit another profile's env vars, e.g. a tmux pane
+	// or an editor terminal started from a shell on that profile.
+	if inherited := os.Getenv("USO_PROFILE"); config.ValidName(inherited) && inherited != current {
+		writeUnsets(&b, inherited)
+	}
 
 	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", shellEscape(current))
 
