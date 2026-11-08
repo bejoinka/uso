@@ -98,6 +98,28 @@ func writeUnsets(b *strings.Builder, profile string) {
 	}
 }
 
+// writeTerminalVisuals writes printf commands that set the iTerm2 tab color
+// from USO_COLOR and the terminal title from USO_TITLE. Values go in as
+// single-quoted arguments, never into the format string, so the shell and
+// printf pass them through verbatim.
+func writeTerminalVisuals(b *strings.Builder, env [][2]string) {
+	for _, kv := range env {
+		switch kv[0] {
+		case "USO_COLOR":
+			parts := strings.SplitN(kv[1], ",", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			for i, channel := range []string{"red", "green", "blue"} {
+				fmt.Fprintf(b, `printf '\033]6;1;bg;%s;brightness;%%s\a' '%s'`+"\n",
+					channel, shellEscape(strings.TrimSpace(parts[i])))
+			}
+		case "USO_TITLE":
+			fmt.Fprintf(b, `printf '\033]0;%%s\a' '%s'`+"\n", shellEscape(kv[1]))
+		}
+	}
+}
+
 // EvalSwitch outputs shell commands to switch to a profile.
 func EvalSwitch(profile string) (string, error) {
 	tools, err := config.LoadTools()
@@ -155,24 +177,7 @@ func EvalSwitch(profile string) (string, error) {
 
 	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", shellEscape(profile))
 
-	// Built-in: iTerm tab color
-	for _, kv := range env {
-		if kv[0] == "USO_COLOR" {
-			parts := strings.SplitN(kv[1], ",", 3)
-			if len(parts) == 3 {
-				fmt.Fprintf(&b, `printf "\033]6;1;bg;red;brightness;%s\a"`, strings.TrimSpace(parts[0]))
-				b.WriteString("\n")
-				fmt.Fprintf(&b, `printf "\033]6;1;bg;green;brightness;%s\a"`, strings.TrimSpace(parts[1]))
-				b.WriteString("\n")
-				fmt.Fprintf(&b, `printf "\033]6;1;bg;blue;brightness;%s\a"`, strings.TrimSpace(parts[2]))
-				b.WriteString("\n")
-			}
-		}
-		if kv[0] == "USO_TITLE" {
-			fmt.Fprintf(&b, `printf "\033]0;%s\a"`, kv[1])
-			b.WriteString("\n")
-		}
-	}
+	writeTerminalVisuals(&b, env)
 
 	// Save current profile
 	config.SetCurrentProfile(profile)
@@ -222,24 +227,7 @@ func EvalRestore() (string, error) {
 		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], shellEscape(kv[1]))
 	}
 
-	// Apply visuals silently
-	for _, kv := range env {
-		if kv[0] == "USO_COLOR" {
-			parts := strings.SplitN(kv[1], ",", 3)
-			if len(parts) == 3 {
-				fmt.Fprintf(&b, `printf "\033]6;1;bg;red;brightness;%s\a"`, strings.TrimSpace(parts[0]))
-				b.WriteString("\n")
-				fmt.Fprintf(&b, `printf "\033]6;1;bg;green;brightness;%s\a"`, strings.TrimSpace(parts[1]))
-				b.WriteString("\n")
-				fmt.Fprintf(&b, `printf "\033]6;1;bg;blue;brightness;%s\a"`, strings.TrimSpace(parts[2]))
-				b.WriteString("\n")
-			}
-		}
-		if kv[0] == "USO_TITLE" {
-			fmt.Fprintf(&b, `printf "\033]0;%s\a"`, kv[1])
-			b.WriteString("\n")
-		}
-	}
+	writeTerminalVisuals(&b, env)
 
 	return b.String(), nil
 }

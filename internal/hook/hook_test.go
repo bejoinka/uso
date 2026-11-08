@@ -151,3 +151,69 @@ func TestEvalRestoreUnsetsNothingWhenAlreadyOnTheProfile(t *testing.T) {
 		t.Errorf("expected no unset; output:\n%s", out)
 	}
 }
+
+func TestTitleAndColorReachTheTerminalVerbatim(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("sh is not installed")
+	}
+
+	tests := []struct {
+		name, key, value string
+		want             string // what the terminal must receive
+	}{
+		{
+			name:  "title with quotes, percent signs and a backslash",
+			key:   "USO_TITLE",
+			value: `Bob's "work" 100% done \n`,
+			want:  "\033]0;Bob's \"work\" 100% done \\n\a",
+		},
+		{
+			name:  "title with command substitution",
+			key:   "USO_TITLE",
+			value: "$(touch pwned) `touch pwned` $HOME",
+			want:  "\033]0;$(touch pwned) `touch pwned` $HOME\a",
+		},
+		{
+			name:  "color edited by hand to contain a command",
+			key:   "USO_COLOR",
+			value: "1,2,$(touch pwned)",
+			want:  "\033]6;1;bg;blue;brightness;$(touch pwned)\a",
+		},
+	}
+	evals := map[string]func() (string, error){
+		"switch":  func() (string, error) { return EvalSwitch("work") },
+		"restore": EvalRestore,
+	}
+	for _, tt := range tests {
+		for evalName, eval := range evals {
+			t.Run(tt.name+"/"+evalName, func(t *testing.T) {
+				setupProfiles(t)
+				if err := config.SetProfileKey("work", tt.key, tt.value); err != nil {
+					t.Fatal(err)
+				}
+				if err := config.SetCurrentProfile("work"); err != nil {
+					t.Fatal(err)
+				}
+				script, err := eval()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				dir := t.TempDir()
+				cmd := exec.Command(sh, "-c", script)
+				cmd.Dir = dir
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("the shell rejected the output: %v\n%s\nscript:\n%s", err, out, script)
+				}
+				if !strings.Contains(string(out), tt.want) {
+					t.Errorf("terminal received %q, want it to contain %q", out, tt.want)
+				}
+				if _, err := os.Stat(filepath.Join(dir, "pwned")); err == nil {
+					t.Error("the value ran a command")
+				}
+			})
+		}
+	}
+}
