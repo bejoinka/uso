@@ -34,6 +34,7 @@ git clone https://github.com/bejoinka/uso.git
 cd uso
 go build -o uso .
 ./uso --help
+go test ./...
 ```
 
 Test the eval output directly:
@@ -66,7 +67,8 @@ internal/
 
 - Keep changes focused — one feature or fix per PR
 - Test with both `zsh` and `bash` if you're touching hook output
-- Run `go build` before submitting (no CI yet)
+- Run `go vet ./...` and `go test ./...` before submitting (no CI yet). The hook tests run the generated function in bash and zsh, and skip a shell that isn't installed
+- For a bug fix, add a test that fails without the fix
 
 ## Adding a named color
 
