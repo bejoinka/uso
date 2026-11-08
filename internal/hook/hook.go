@@ -17,25 +17,30 @@ func shellEscape(s string) string {
 
 // Zsh outputs the shell code for eval "$(uso hook zsh)".
 func Zsh() string {
-	return shellHook("zsh")
+	return shellHook("zsh", binPath())
 }
 
 // Bash outputs the shell code for eval "$(uso hook bash)".
 func Bash() string {
-	return shellHook("bash")
+	return shellHook("bash", binPath())
 }
 
-func shellHook(shell string) string {
+// binPath returns the path of the running binary, with symlinks resolved
+// (e.g., Homebrew bin -> cellar).
+func binPath() string {
 	bin, _ := os.Executable()
-	// Resolve symlinks (e.g., Homebrew cellar -> bin)
 	if resolved, err := filepath.EvalSymlinks(bin); err == nil {
 		bin = resolved
 	}
+	return bin
+}
 
+func shellHook(shell, bin string) string {
 	var b strings.Builder
 
 	// Main function: runs the binary with "eval" subcommand, evals the output
-	fmt.Fprintf(&b, `uso() { eval "$(%s eval "$@")" }`, bin)
+	// The ';' before '}' is required by bash.
+	fmt.Fprintf(&b, `uso() { eval "$(%s eval "$@")"; }`, bin)
 	b.WriteString("\n")
 
 	// Completions
