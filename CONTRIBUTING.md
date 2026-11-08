@@ -10,14 +10,16 @@ The easiest way to contribute. Each tool needs three things:
 2. **The default symlink path** (e.g. `~/.claude`)
 3. **The accounts directory** where profiles are stored (e.g. `~/.claude-accounts`)
 
+Some tools also keep a file next to the config directory that they read from inside it when the env var is set, as Claude Code does with `~/.claude.json`. Give that path as the state file, and `uso init` copies it into the default profile. Leave it empty if the tool has none.
+
 To add a built-in tool, edit `internal/config/config.go` and add an entry to `KnownTools()`:
 
 ```go
 func KnownTools() []KnownTool {
     home, _ := os.UserHomeDir()
     return []KnownTool{
-        {"claude", "CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"), filepath.Join(home, ".claude-accounts"), "Claude Code"},
-        {"codex", "CODEX_HOME", filepath.Join(home, ".codex"), filepath.Join(home, ".codex-accounts"), "Codex CLI"},
+        {"claude", "CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"), filepath.Join(home, ".claude-accounts"), "Claude Code", filepath.Join(home, ".claude.json")},
+        {"codex", "CODEX_HOME", filepath.Join(home, ".codex"), filepath.Join(home, ".codex-accounts"), "Codex CLI", ""},
         // add yours here
     }
 }

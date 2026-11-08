@@ -78,6 +78,40 @@ func MigrateTool(toolName, symlink, accountsDir, profile string) MigrateResult {
 	return result
 }
 
+// CopyStateFile copies a tool's state file, such as ~/.claude.json, into a
+// profile directory, keeping its permissions. It does nothing if the source
+// is missing or the profile already has the file, and reports whether it
+// copied. The original stays in place for programs that don't get the
+// tool's env var, such as IDE extensions.
+func CopyStateFile(src, profileDir string) (bool, error) {
+	if src == "" {
+		return false, nil
+	}
+	dst := filepath.Join(profileDir, filepath.Base(src))
+	if _, err := os.Lstat(dst); err == nil {
+		return false, nil
+	}
+
+	info, err := os.Stat(src)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return false, err
+	}
+	if err := os.MkdirAll(profileDir, 0755); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(dst, data, info.Mode().Perm()); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func copyDir(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

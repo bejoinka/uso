@@ -84,3 +84,14 @@ func TestProfileExists(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudeCodeStateFileIsClaudeJSON(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	for _, tool := range KnownTools() {
+		if tool.ID == "claude" && tool.StateFile != filepath.Join(home, ".claude.json") {
+			t.Errorf("Claude Code StateFile = %q, want ~/.claude.json", tool.StateFile)
+		}
+	}
+}

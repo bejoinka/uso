@@ -19,14 +19,17 @@ type KnownTool struct {
 	Symlink     string // with $HOME expanded
 	AccountsDir string // with $HOME expanded
 	Label       string
+	// StateFile is a file the tool keeps next to Symlink, not inside it, but
+	// reads from inside the config directory when EnvVar is set. Empty if none.
+	StateFile string // with $HOME expanded
 }
 
 // KnownTools returns the built-in tool list.
 func KnownTools() []KnownTool {
 	home, _ := os.UserHomeDir()
 	return []KnownTool{
-		{"claude", "CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"), filepath.Join(home, ".claude-accounts"), "Claude Code"},
-		{"codex", "CODEX_HOME", filepath.Join(home, ".codex"), filepath.Join(home, ".codex-accounts"), "Codex CLI"},
+		{"claude", "CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"), filepath.Join(home, ".claude-accounts"), "Claude Code", filepath.Join(home, ".claude.json")},
+		{"codex", "CODEX_HOME", filepath.Join(home, ".codex"), filepath.Join(home, ".codex-accounts"), "Codex CLI", ""},
 	}
 }
 

@@ -24,6 +24,28 @@ func useTempConfig(t *testing.T) string {
 	return root
 }
 
+// claudeTool returns the built-in Claude Code definition with its paths under root.
+func claudeTool(root string) config.KnownTool {
+	return config.KnownTool{
+		ID:          "claude",
+		EnvVar:      "CLAUDE_CONFIG_DIR",
+		Symlink:     filepath.Join(root, ".claude"),
+		AccountsDir: filepath.Join(root, ".claude-accounts"),
+		Label:       "Claude Code",
+		StateFile:   filepath.Join(root, ".claude.json"),
+	}
+}
+
+func writeFile(t *testing.T, path, content string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), perm); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func listOutput(t *testing.T) string {
 	t.Helper()
 	var out bytes.Buffer
@@ -37,13 +59,7 @@ func listOutput(t *testing.T) string {
 
 func TestInitWithACustomDefaultProfileName(t *testing.T) {
 	root := useTempConfig(t)
-	claude := config.KnownTool{
-		ID:          "claude",
-		EnvVar:      "CLAUDE_CONFIG_DIR",
-		Symlink:     filepath.Join(root, ".claude"),
-		AccountsDir: filepath.Join(root, ".claude-accounts"),
-		Label:       "Claude Code",
-	}
+	claude := claudeTool(root)
 	if err := os.MkdirAll(claude.Symlink, 0755); err != nil { // existing config to migrate
 		t.Fatal(err)
 	}
@@ -85,6 +101,48 @@ func TestInitWithNoToolsStillCreatesTheDefaultProfile(t *testing.T) {
 
 	if !config.ProfileExists("personal") {
 		t.Error("the default profile 'personal' does not exist after init")
+	}
+}
+
+func TestInitCopiesClaudeStateIntoTheDefaultProfile(t *testing.T) {
+	root := useTempConfig(t)
+	claude := claudeTool(root)
+	writeFile(t, filepath.Join(claude.Symlink, "settings.json"), "{}", 0644)
+	writeFile(t, claude.StateFile, `{"mcpServers":{"linear":{}}}`, 0600)
+
+	if err := applyInit(io.Discard, []config.KnownTool{claude}, "home"); err != nil {
+		t.Fatal(err)
+	}
+
+	copied := filepath.Join(claude.AccountsDir, "home", ".claude.json")
+	data, err := os.ReadFile(copied)
+	if err != nil {
+		t.Fatalf("~/.claude.json was not copied into the default profile: %v", err)
+	}
+	if string(data) != `{"mcpServers":{"linear":{}}}` {
+		t.Errorf("copied ~/.claude.json = %q", data)
+	}
+	if info, err := os.Stat(copied); err != nil || info.Mode().Perm() != 0600 {
+		t.Errorf("copied ~/.claude.json should keep mode 0600; got %v, %v", info.Mode().Perm(), err)
+	}
+	if _, err := os.Stat(claude.StateFile); err != nil {
+		t.Errorf("the original ~/.claude.json should stay in place: %v", err)
+	}
+}
+
+func TestInitKeepsAStateFileTheProfileAlreadyHas(t *testing.T) {
+	root := useTempConfig(t)
+	claude := claudeTool(root)
+	writeFile(t, claude.StateFile, "top-level", 0600)
+	inProfile := filepath.Join(claude.AccountsDir, "home", ".claude.json")
+	writeFile(t, inProfile, "the profile's own", 0600)
+
+	if err := applyInit(io.Discard, []config.KnownTool{claude}, "home"); err != nil {
+		t.Fatal(err)
+	}
+
+	if data, _ := os.ReadFile(inProfile); string(data) != "the profile's own" {
+		t.Errorf("init overwrote the profile's .claude.json with %q", data)
 	}
 }
 

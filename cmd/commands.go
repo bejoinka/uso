@@ -81,6 +81,16 @@ func applyInit(out io.Writer, tools []config.KnownTool, defaultProfile string) e
 		} else {
 			fmt.Fprintf(out, "  + %s\n", t.Label)
 		}
+		if result.Error != nil {
+			continue
+		}
+
+		copied, err := config.CopyStateFile(t.StateFile, filepath.Join(t.AccountsDir, defaultProfile))
+		if err != nil {
+			fmt.Fprintf(out, "  ! %s: copy %s: %s\n", t.Label, t.StateFile, err)
+		} else if copied {
+			fmt.Fprintf(out, "    copied %s into %s/%s/\n", t.StateFile, t.AccountsDir, defaultProfile)
+		}
 	}
 
 	registered, err := config.LoadTools()
