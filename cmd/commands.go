@@ -3,8 +3,10 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/bejoinka/uso/internal/config"
@@ -197,9 +199,16 @@ func runAddTool(cmd *cobra.Command, args []string) error {
 
 func runAddProfile(cmd *cobra.Command, args []string) error {
 	profile := args[0]
+	source, _ := cmd.Flags().GetString("share")
 
 	if !config.ValidName(profile) {
 		return fmt.Errorf("invalid name '%s' (lowercase alphanumeric + hyphens, max 32)", profile)
+	}
+	if source == profile {
+		return fmt.Errorf("profile '%s' can't share with itself", profile)
+	}
+	if source != "" && !config.ProfileExists(source) {
+		return fmt.Errorf("profile '%s' not found", source)
 	}
 
 	tools, err := config.LoadTools()
@@ -211,13 +220,31 @@ func runAddProfile(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	for name, t := range tools {
-		fmt.Printf("  %s: %s/\n", name, filepath.Join(t.AccountsDir, profile))
+	out := cmd.OutOrStdout()
+	for _, name := range slices.Sorted(maps.Keys(tools)) {
+		t := tools[name]
+		fmt.Fprintf(out, "  %s: %s/\n", name, filepath.Join(t.AccountsDir, profile))
+		if source == "" {
+			continue
+		}
+
+		res, err := config.ShareProfile(name, t, profile, source)
+		if err != nil {
+			return fmt.Errorf("share %s with %s: %w", name, source, err)
+		}
+		if len(res.Linked) == 0 {
+			fmt.Fprintf(out, "    nothing to share for %s\n", name)
+			continue
+		}
+		fmt.Fprintf(out, "    shares %s with %s\n", strings.Join(res.Linked, ", "), source)
+		for _, p := range res.BackedUp {
+			fmt.Fprintf(out, "    kept %s's version; this profile's differed and is now at %s\n", source, p)
+		}
 	}
 
-	fmt.Printf("\nProfile '%s' ready. Configure:\n", profile)
-	fmt.Printf("  uso set %s USO_TITLE \"%s\"\n", profile, profile)
-	fmt.Printf("  uso set %s USO_COLOR blue    # or: red, orange, teal, purple, 0,168,120\n", profile)
+	fmt.Fprintf(out, "\nProfile '%s' ready. Configure:\n", profile)
+	fmt.Fprintf(out, "  uso set %s USO_TITLE \"%s\"\n", profile, profile)
+	fmt.Fprintf(out, "  uso set %s USO_COLOR blue    # or: red, orange, teal, purple, 0,168,120\n", profile)
 	return nil
 }
 

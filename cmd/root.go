@@ -25,6 +25,10 @@ Usage:
   uso set <profile> <KEY> <value>    Set an env var on a profile
   uso set <profile> <KEY>            Remove an env var from a profile
   uso add-profile <name>             Create a profile
+  uso add-profile <name> --share <profile>
+                                     Create or convert a profile that shares settings,
+                                     skills, plugins and project memory with another;
+                                     only the login stays separate
   uso add-tool <name> <ENV_VAR> <default-dir> <accounts-dir>
                                      Register another tool
   uso init                           Set up uso and move your existing config into a default profile
@@ -169,7 +173,7 @@ var addToolCmd = &cobra.Command{
 var addProfileCmd = &cobra.Command{
 	Use:   "_add-profile <name>",
 	Short: "Create a profile",
-	Args:  usageArgs(cobra.ExactArgs(1), "uso add-profile <name>"),
+	Args:  usageArgs(cobra.ExactArgs(1), "uso add-profile <name> [--share <profile>]"),
 	RunE:  runAddProfile,
 }
 
@@ -232,6 +236,8 @@ func init() {
 
 	// A value such as --max-old-space-size=4096 is an argument, not a flag
 	setCmd.Flags().SetInterspersed(false)
+
+	addProfileCmd.Flags().String("share", "", "share settings, skills, plugins and project memory with this profile")
 
 	completionsCmd.AddCommand(completionsProfilesCmd)
 

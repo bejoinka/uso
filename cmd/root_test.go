@@ -11,6 +11,7 @@ import (
 
 	"github.com/bejoinka/uso/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // execute runs the uso binary's root command with args and returns what it printed.
@@ -27,11 +28,12 @@ func execute(t *testing.T, args ...string) (string, error) {
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)
 		rootCmd.SetArgs(nil)
-		// cobra keeps --help set between runs
+		// cobra keeps flag values between runs
 		for _, c := range append([]*cobra.Command{rootCmd}, rootCmd.Commands()...) {
-			if f := c.Flags().Lookup("help"); f != nil {
-				f.Value.Set("false")
-			}
+			c.Flags().VisitAll(func(f *pflag.Flag) {
+				f.Value.Set(f.DefValue)
+				f.Changed = false
+			})
 		}
 	})
 	err := rootCmd.Execute()
@@ -85,7 +87,7 @@ func TestArgumentErrorsShowCommandsAsUsersTypeThem(t *testing.T) {
 		want string
 	}{
 		{[]string{"_set", "work"}, "usage: uso set <profile> <KEY> [value]"},
-		{[]string{"_add-profile"}, "usage: uso add-profile <name>"},
+		{[]string{"_add-profile"}, "usage: uso add-profile <name> [--share <profile>]"},
 		{[]string{"_add-tool", "gemini"}, "usage: uso add-tool <name> <ENV_VAR> <default-dir> <accounts-dir>"},
 		{[]string{"_show", "a", "b"}, "usage: uso show [profile]"},
 		{[]string{"hook"}, "usage: uso hook zsh|bash"},
