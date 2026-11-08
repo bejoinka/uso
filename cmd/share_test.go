@@ -219,3 +219,14 @@ func TestShareTreatsIdenticalLinksAsTheSame(t *testing.T) {
 		t.Errorf("identical links were backed up as conflicts: %v", backups)
 	}
 }
+
+func TestListShowsWhichProfileAProfileShares(t *testing.T) {
+	setupShare(t)
+	if _, err := execute(t, "_add-profile", "awell2", "--share", "awell"); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := listOutput(t), "  awell\n  awell2 (shares awell)\n"; got != want {
+		t.Errorf("uso list = %q, want %q", got, want)
+	}
+}

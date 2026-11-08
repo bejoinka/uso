@@ -113,6 +113,25 @@ func ShareProfile(tool string, t Tool, profile, source string) (ShareResult, err
 	return res, nil
 }
 
+// SharedWith returns the profile that profile shares items with, as set up
+// by ShareProfile, or "" if it shares nothing.
+func SharedWith(profile string) string {
+	tools, _ := LoadTools()
+	for name, t := range tools {
+		for _, item := range sharedItems[name] {
+			link, err := os.Readlink(filepath.Join(t.AccountsDir, profile, item.name))
+			if err != nil {
+				continue
+			}
+			sourceDir := filepath.Dir(link)
+			if filepath.Dir(sourceDir) == filepath.Clean(t.AccountsDir) {
+				return filepath.Base(sourceDir)
+			}
+		}
+	}
+	return ""
+}
+
 // merge moves from into into, entry by entry. Where into already has a
 // different file, from's version moves into the backup directory instead.
 // from no longer exists afterwards.

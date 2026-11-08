@@ -124,7 +124,10 @@ func runList(cmd *cobra.Command, args []string) error {
 			marker = "* "
 		}
 		if p == defaultProfile {
-			suffix = " (default)"
+			suffix += " (default)"
+		}
+		if source := config.SharedWith(p); source != "" {
+			suffix += " (shares " + source + ")"
 		}
 		fmt.Fprintf(out, "%s%s%s\n", marker, p, suffix)
 	}
