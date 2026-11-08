@@ -94,7 +94,7 @@ var evalCmd = &cobra.Command{
 
 		if len(args) == 0 {
 			// uso (no args) → print current profile
-			fmt.Fprintf(out, "echo '%s'\n", config.CurrentProfile())
+			fmt.Fprintf(out, "echo '%s'\n", hook.ShellEscape(config.CurrentProfile()))
 			return nil
 		}
 
@@ -129,11 +129,12 @@ var evalCmd = &cobra.Command{
 }
 
 // passThrough prints a command that runs one of the binary's own
-// subcommands directly, with the user's arguments.
+// subcommands directly, with the user's arguments single-quoted so the
+// shell passes them through verbatim.
 func passThrough(out io.Writer, sub string, args []string) {
 	fmt.Fprintf(out, "command %s %s", os.Args[0], sub)
 	for _, a := range args {
-		fmt.Fprintf(out, " '%s'", a)
+		fmt.Fprintf(out, " '%s'", hook.ShellEscape(a))
 	}
 	fmt.Fprintln(out)
 }

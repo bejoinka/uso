@@ -9,9 +9,9 @@ import (
 	"github.com/bejoinka/uso/internal/config"
 )
 
-// shellEscape escapes a string for safe use in single-quoted shell context.
+// ShellEscape escapes a string for safe use in single-quoted shell context.
 // Replaces ' with '\'' (end quote, escaped quote, start quote).
-func shellEscape(s string) string {
+func ShellEscape(s string) string {
 	return strings.ReplaceAll(s, "'", `'\''`)
 }
 
@@ -112,10 +112,10 @@ func writeTerminalVisuals(b *strings.Builder, env [][2]string) {
 			}
 			for i, channel := range []string{"red", "green", "blue"} {
 				fmt.Fprintf(b, `printf '\033]6;1;bg;%s;brightness;%%s\a' '%s'`+"\n",
-					channel, shellEscape(strings.TrimSpace(parts[i])))
+					channel, ShellEscape(strings.TrimSpace(parts[i])))
 			}
 		case "USO_TITLE":
-			fmt.Fprintf(b, `printf '\033]0;%%s\a' '%s'`+"\n", shellEscape(kv[1]))
+			fmt.Fprintf(b, `printf '\033]0;%%s\a' '%s'`+"\n", ShellEscape(kv[1]))
 		}
 	}
 }
@@ -165,17 +165,17 @@ func EvalSwitch(profile string) (string, error) {
 			continue
 		}
 
-		fmt.Fprintf(&b, "export %s='%s'\n", t.EnvVar, shellEscape(profileDir))
-		fmt.Fprintf(&b, "echo '-> %s: %s  [%s]'\n", shellEscape(name), shellEscape(profile), shellEscape(profileDir))
+		fmt.Fprintf(&b, "export %s='%s'\n", t.EnvVar, ShellEscape(profileDir))
+		fmt.Fprintf(&b, "echo '-> %s: %s  [%s]'\n", ShellEscape(name), ShellEscape(profile), ShellEscape(profileDir))
 	}
 
 	// Export profile env vars
 	env, _ := config.LoadProfileEnv(profile)
 	for _, kv := range env {
-		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], shellEscape(kv[1]))
+		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], ShellEscape(kv[1]))
 	}
 
-	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", shellEscape(profile))
+	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", ShellEscape(profile))
 
 	writeTerminalVisuals(&b, env)
 
@@ -185,7 +185,7 @@ func EvalSwitch(profile string) (string, error) {
 	// Post-switch hook
 	hookPath := filepath.Join(config.Dir(), "post-switch")
 	if info, err := os.Stat(hookPath); err == nil && info.Mode()&0111 != 0 {
-		fmt.Fprintf(&b, "'%s' '%s'\n", shellEscape(hookPath), shellEscape(profile))
+		fmt.Fprintf(&b, "'%s' '%s'\n", ShellEscape(hookPath), ShellEscape(profile))
 	}
 
 	return b.String(), nil
@@ -207,7 +207,7 @@ func EvalRestore() (string, error) {
 		writeUnsets(&b, inherited)
 	}
 
-	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", shellEscape(current))
+	fmt.Fprintf(&b, "export USO_PROFILE='%s'\n", ShellEscape(current))
 
 	for _, t := range tools {
 		profileDir := filepath.Join(t.AccountsDir, current)
@@ -217,14 +217,14 @@ func EvalRestore() (string, error) {
 				os.Remove(t.Symlink)
 				os.Symlink(profileDir, t.Symlink)
 			}
-			fmt.Fprintf(&b, "export %s='%s'\n", t.EnvVar, shellEscape(profileDir))
+			fmt.Fprintf(&b, "export %s='%s'\n", t.EnvVar, ShellEscape(profileDir))
 		}
 	}
 
 	// Restore profile env vars
 	env, _ := config.LoadProfileEnv(current)
 	for _, kv := range env {
-		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], shellEscape(kv[1]))
+		fmt.Fprintf(&b, "export %s='%s'\n", kv[0], ShellEscape(kv[1]))
 	}
 
 	writeTerminalVisuals(&b, env)

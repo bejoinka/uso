@@ -3,6 +3,8 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -149,5 +151,41 @@ func TestSetStoresAValueThatStartsWithADash(t *testing.T) {
 	}
 	if want := [][2]string{{"NODE_OPTIONS", "--max-old-space-size=4096"}}; !reflect.DeepEqual(env, want) {
 		t.Errorf("work's env = %v, want %v", env, want)
+	}
+}
+
+func TestArgumentsWithQuotesReachTheBinaryVerbatim(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("sh is not installed")
+	}
+	useTempConfig(t)
+	title := `Bob's "work" $(touch pwned) ` + "`touch pwned`" + ` 100%`
+
+	out, err := execute(t, "eval", "set", "work", "USO_TITLE", title)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Run eval's output with the binary swapped for a function that prints
+	// each argument it receives on its own line.
+	prefix := "command " + os.Args[0] + " "
+	if !strings.HasPrefix(out, prefix) {
+		t.Fatalf("eval printed %q, want it to start with %q", out, prefix)
+	}
+	script := `args() { for a in "$@"; do printf '[%s]\n' "$a"; done; }` + "\nargs " + strings.TrimPrefix(out, prefix)
+	dir := t.TempDir()
+	cmd := exec.Command(sh, "-c", script)
+	cmd.Dir = dir
+	got, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the shell rejected eval's output: %v\n%s\nscript:\n%s", err, got, script)
+	}
+
+	if want := "[_set]\n[work]\n[USO_TITLE]\n[" + title + "]\n"; string(got) != want {
+		t.Errorf("the binary would receive:\n%s\nwant:\n%s", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pwned")); err == nil {
+		t.Error("an argument ran a command")
 	}
 }
