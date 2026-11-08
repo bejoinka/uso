@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/bejoinka/uso/internal/config"
@@ -71,81 +72,70 @@ var hookCmd = &cobra.Command{
 
 // ── eval (called by shell wrapper) ──────────────────────────────
 
-var evalRestore bool
-
 var evalCmd = &cobra.Command{
 	Use:    "eval [profile|subcommand] [args...]",
 	Short:  "Output shell commands (used by the shell wrapper)",
 	Hidden: true,
 	Args:   cobra.ArbitraryArgs,
+	// Everything after `eval` is what the user typed after `uso`, so
+	// `uso --help` and values like --max-old-space-size=4096 must reach
+	// RunE as arguments, not be parsed as eval's own flags.
+	DisableFlagParsing: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if evalRestore {
-			out, err := hook.EvalRestore()
+		out := cmd.OutOrStdout()
+		if len(args) > 0 && args[0] == "--restore" {
+			script, err := hook.EvalRestore()
 			if err != nil {
 				return err
 			}
-			fmt.Print(out)
+			fmt.Fprint(out, script)
 			return nil
 		}
 
 		if len(args) == 0 {
 			// uso (no args) → print current profile
-			fmt.Printf("echo '%s'\n", config.CurrentProfile())
+			fmt.Fprintf(out, "echo '%s'\n", config.CurrentProfile())
 			return nil
 		}
 
 		switch args[0] {
 		case "init":
 			// init is interactive, run directly
-			fmt.Printf("command %s _init\n", os.Args[0])
-			return nil
+			passThrough(out, "_init", nil)
 		case "list", "ls":
-			fmt.Printf("command %s _list\n", os.Args[0])
-			return nil
+			passThrough(out, "_list", nil)
 		case "status":
-			fmt.Printf("command %s _status\n", os.Args[0])
-			return nil
+			passThrough(out, "_status", nil)
 		case "add-tool":
-			fmt.Printf("command %s _add-tool", os.Args[0])
-			for _, a := range args[1:] {
-				fmt.Printf(" '%s'", a)
-			}
-			fmt.Println()
-			return nil
+			passThrough(out, "_add-tool", args[1:])
 		case "add-profile":
-			fmt.Printf("command %s _add-profile", os.Args[0])
-			for _, a := range args[1:] {
-				fmt.Printf(" '%s'", a)
-			}
-			fmt.Println()
-			return nil
+			passThrough(out, "_add-profile", args[1:])
 		case "set":
-			fmt.Printf("command %s _set", os.Args[0])
-			for _, a := range args[1:] {
-				fmt.Printf(" '%s'", a)
-			}
-			fmt.Println()
-			return nil
+			passThrough(out, "_set", args[1:])
 		case "show":
-			fmt.Printf("command %s _show", os.Args[0])
-			for _, a := range args[1:] {
-				fmt.Printf(" '%s'", a)
-			}
-			fmt.Println()
-			return nil
+			passThrough(out, "_show", args[1:])
 		case "help", "--help", "-h":
-			fmt.Printf("command %s --help\n", os.Args[0])
-			return nil
+			passThrough(out, "--help", nil)
 		default:
 			// Treat as profile name → switch
-			out, err := hook.EvalSwitch(args[0])
+			script, err := hook.EvalSwitch(args[0])
 			if err != nil {
 				return err
 			}
-			fmt.Print(out)
-			return nil
+			fmt.Fprint(out, script)
 		}
+		return nil
 	},
+}
+
+// passThrough prints a command that runs one of the binary's own
+// subcommands directly, with the user's arguments.
+func passThrough(out io.Writer, sub string, args []string) {
+	fmt.Fprintf(out, "command %s %s", os.Args[0], sub)
+	for _, a := range args {
+		fmt.Fprintf(out, " '%s'", a)
+	}
+	fmt.Fprintln(out)
 }
 
 // ── Direct subcommands (called via `command uso _xxx`) ──────────
@@ -239,7 +229,8 @@ func init() {
 		fmt.Fprint(cmd.OutOrStdout(), rootHelp)
 	})
 
-	evalCmd.Flags().BoolVar(&evalRestore, "restore", false, "restore last profile")
+	// A value such as --max-old-space-size=4096 is an argument, not a flag
+	setCmd.Flags().SetInterspersed(false)
 
 	completionsCmd.AddCommand(completionsProfilesCmd)
 

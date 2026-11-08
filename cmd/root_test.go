@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"bytes"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/bejoinka/uso/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -97,5 +100,54 @@ func TestArgumentErrorsShowCommandsAsUsersTypeThem(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The shell function runs `uso eval <what the user typed>`, so eval must
+// not treat the user's arguments as its own flags.
+func TestEvalPassesFlagLikeArgumentsThrough(t *testing.T) {
+	useTempConfig(t)
+	bin := "command " + os.Args[0]
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"eval", "--help"}, bin + " --help\n"},
+		{[]string{"eval", "-h"}, bin + " --help\n"},
+		{
+			[]string{"eval", "set", "work", "NODE_OPTIONS", "--max-old-space-size=4096"},
+			bin + " _set 'work' 'NODE_OPTIONS' '--max-old-space-size=4096'\n",
+		},
+		{[]string{"eval", "--restore"}, ""}, // no tools configured, so nothing to restore
+	}
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
+			out, err := execute(t, tt.args...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out != tt.want {
+				t.Errorf("uso %s printed:\n%s\nwant:\n%s", strings.Join(tt.args, " "), out, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetStoresAValueThatStartsWithADash(t *testing.T) {
+	useTempConfig(t)
+	if err := config.EnsureProfileDir("work", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := execute(t, "_set", "work", "NODE_OPTIONS", "--max-old-space-size=4096"); err != nil {
+		t.Fatal(err)
+	}
+
+	env, err := config.LoadProfileEnv("work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := [][2]string{{"NODE_OPTIONS", "--max-old-space-size=4096"}}; !reflect.DeepEqual(env, want) {
+		t.Errorf("work's env = %v, want %v", env, want)
 	}
 }
