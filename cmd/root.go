@@ -129,6 +129,8 @@ var evalCmd = &cobra.Command{
 			passThrough(out, "_copy-session", args[1:])
 		case "menubar":
 			passThrough(out, "_menubar", args[1:])
+		case "hook":
+			passThrough(out, "hook", args[1:])
 		case "help", "--help", "-h":
 			passThrough(out, "--help", nil)
 		default:
