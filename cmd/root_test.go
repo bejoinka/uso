@@ -137,6 +137,26 @@ func TestEvalPassesFlagLikeArgumentsThrough(t *testing.T) {
 	}
 }
 
+// Every command `uso help` lists must work through the shell function, which
+// sends it to eval, rather than be taken for a profile name.
+func TestEvalRunsEveryCommandTheHelpLists(t *testing.T) {
+	useTempConfig(t)
+	for _, line := range strings.Split(rootHelp, "\n") {
+		fields := strings.Fields(line)
+		// Skip `uso <profile>` and `uso` alone, whose second word starts its description
+		if len(fields) < 2 || fields[0] != "uso" || fields[1] != strings.ToLower(fields[1]) || strings.HasPrefix(fields[1], "<") {
+			continue
+		}
+		name := strings.TrimSuffix(fields[1], ",")
+		t.Run(name, func(t *testing.T) {
+			out, err := execute(t, "eval", name)
+			if err != nil || !strings.HasPrefix(out, "command ") {
+				t.Errorf("uso %s printed %q (%v), want a command that runs it", name, out, err)
+			}
+		})
+	}
+}
+
 func TestSetStoresAValueThatStartsWithADash(t *testing.T) {
 	useTempConfig(t)
 	if err := config.EnsureProfileDir("work", nil); err != nil {
