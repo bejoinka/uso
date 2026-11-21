@@ -275,6 +275,45 @@ Run the same command on an existing profile. Close Claude Code in both profiles 
   cp -R ~/.claude-accounts/awell/skills ~/.claude-accounts/awell2/
   ```
 
+## Moving a session to another profile
+
+To carry on a Claude Code session under another account, for example when one hits its usage limit, copy it into that profile:
+
+```
+$ uso copy-session systems awell2
+Copied session 'systems' (313678d1-50b7-4f10-836b-d50c56e47f71) from awell to awell2. Resume it with:
+  uso awell2 && cd '/Users/me/code/api' && claude --resume 313678d1-50b7-4f10-836b-d50c56e47f71
+```
+
+Name the session by the title you gave it with `/rename`, by its ID, or by the start of its ID. uso looks in every profile. If more than one session matches, it lists them with where and when each last ran; pass more of the ID, or `--from <profile>` to pick the profile to copy from.
+
+uso copies the transcript, its subagent transcripts and tool results, and its `/rewind` checkpoints. The original stays where it was, so the two copies carry on separately from here. uso doesn't overwrite a session the other profile already has. Profiles that share `projects/` already see each other's sessions and don't need this.
+
+## Recent sessions in the menu bar (optional)
+
+With [SwiftBar](https://swiftbar.app), uso can list your 15 most recent Claude Code sessions in the macOS menu bar, across all profiles, with each one's profile, name, folder, and when you last used it:
+
+```
+PROFILE  SESSION                    PATH                  LAST
+awell    systems                    ~/code/api              2m
+awell2   Billing migration          ~/code/billing          6m
+home     weekend-project            ~/code/weekend          3h
+```
+
+Click a session to copy the command that resumes it, such as `uso awell && cd '/Users/me/code/api' && claude --resume 313678d1-…`. Paste it into a terminal.
+
+```sh
+brew install --cask swiftbar
+mkdir -p ~/.config/swiftbar
+uso menubar > ~/.config/swiftbar/uso-sessions.sh
+chmod +x ~/.config/swiftbar/uso-sessions.sh
+open -a SwiftBar    # the first time, choose ~/.config/swiftbar as the plugin folder
+```
+
+To add options to the copied `claude` command, pass them when you make the plugin: `uso menubar --claude-flags=--dangerously-skip-permissions > ~/.config/swiftbar/uso-sessions.sh`.
+
+The list is built each time you open the menu, which takes about a tenth of a second; nothing runs in the background. Keep the file name without an interval such as `.30s.`, which would make SwiftBar run it on a timer. The plugin calls uso by its full path, so run `uso menubar` again if you move uso.
+
 ## Adding other tools
 
 uso ships with Claude Code and Codex CLI. You can add any tool that keeps its config in a single directory in your home folder.

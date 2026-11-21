@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -304,5 +305,69 @@ func runShow(cmd *cobra.Command, args []string) error {
 	for _, kv := range env {
 		fmt.Printf("  %s=%s\n", kv[0], kv[1])
 	}
+	return nil
+}
+
+func runCopySession(cmd *cobra.Command, args []string) error {
+	ref, to := args[0], args[1]
+	from, _ := cmd.Flags().GetString("from")
+
+	if !config.ProfileExists(to) {
+		return fmt.Errorf("profile '%s' not found", to)
+	}
+	if from != "" && !config.ProfileExists(from) {
+		return fmt.Errorf("profile '%s' not found", from)
+	}
+	tools, err := config.LoadTools()
+	if err != nil {
+		return err
+	}
+	claude, ok := tools["claude"]
+	if !ok {
+		return fmt.Errorf("Claude Code isn't registered with uso; run uso init")
+	}
+
+	found, err := config.FindSessions(claude.AccountsDir, ref, from)
+	if err != nil {
+		return err
+	}
+	// A match in the target profile is where the copy would go, not a source.
+	var sources []config.Session
+	for _, s := range found {
+		if s.Profile != to {
+			sources = append(sources, s)
+		}
+	}
+	switch {
+	case len(sources) == 0 && len(found) > 0:
+		return fmt.Errorf("session '%s' is already in '%s'", ref, to)
+	case len(sources) == 0:
+		return fmt.Errorf("no session with ID or title '%s'", ref)
+	case len(sources) > 1:
+		var b strings.Builder
+		fmt.Fprintf(&b, "'%s' matches %d sessions; pass more of the ID, or --from <profile>:", ref, len(sources))
+		for _, s := range sources {
+			fmt.Fprintf(&b, "\n  %-10s %s  %s  (%s, last used %s)", s.Profile, s.ID, s.Title,
+				s.WorkingDir(claude.AccountsDir), s.Modified.Format("Jan 2 15:04"))
+		}
+		return errors.New(b.String())
+	}
+
+	s := sources[0]
+	if err := config.CopySession(claude.AccountsDir, s, to); err != nil {
+		if errors.Is(err, config.ErrSessionExists) {
+			return fmt.Errorf("profile '%s' already has session %s", to, s.ID)
+		}
+		return err
+	}
+
+	name := s.ID
+	if s.Title != "" {
+		name = fmt.Sprintf("'%s' (%s)", s.Title, s.ID)
+	}
+	resume := resumeCommand(claude.AccountsDir, s, to, "")
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Copied session %s from %s to %s. Resume it with:\n  %s\n", name, s.Profile, to, resume)
 	return nil
 }

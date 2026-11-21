@@ -51,12 +51,14 @@ Test the eval output directly:
 main.go                    # entry point
 cmd/
   root.go                  # cobra CLI setup, eval command, hook command
-  commands.go              # init, list, status, set, show, add-tool, add-profile
+  commands.go              # init, list, status, set, show, add-tool, add-profile, copy-session
+  menubar.go               # menubar: the SwiftBar plugin and the menu it prints
 internal/
   config/
     config.go              # profiles, tools, file I/O
     colors.go              # named color resolution
     migrate.go             # auto-migration of real dirs to symlinks
+    session.go             # finding, labelling and copying Claude Code sessions
   hook/
     hook.go                # shell hook generation, eval output
   tui/

@@ -48,7 +48,7 @@ func shellHook(shell, bin string) string {
 		fmt.Fprintf(&b, `
 _uso_completions() {
   local -a subcmds profiles
-  subcmds=(list status init add-tool add-profile set show help)
+  subcmds=(list status init add-tool add-profile set show copy-session menubar help)
   profiles=($(%s completions profiles 2>/dev/null))
   if (( CURRENT == 2 )); then
     compadd -a subcmds profiles
@@ -62,7 +62,7 @@ compdef _uso_completions uso 2>/dev/null
 		fmt.Fprintf(&b, `
 _uso_completions_bash() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
-  local subcmds="list status init add-tool add-profile set show help"
+  local subcmds="list status init add-tool add-profile set show copy-session menubar help"
   local profiles="$(%s completions profiles 2>/dev/null)"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=($(compgen -W "$subcmds $profiles" -- "$cur"))

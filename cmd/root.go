@@ -29,6 +29,13 @@ Usage:
                                      Create or convert a profile that shares settings,
                                      skills, plugins and project memory with another;
                                      only the login stays separate
+  uso copy-session <session> <profile>
+                                     Copy a Claude Code session, by ID, ID prefix or
+                                     /rename title, into another profile to resume it there
+  uso menubar [--claude-flags <flags>]
+                                     Print a SwiftBar plugin that lists recent Claude Code
+                                     sessions in the menu bar; a click copies the command
+                                     that resumes one
   uso add-tool <name> <ENV_VAR> <default-dir> <accounts-dir>
                                      Register another tool
   uso init                           Set up uso and move your existing config into a default profile
@@ -118,6 +125,10 @@ var evalCmd = &cobra.Command{
 			passThrough(out, "_set", args[1:])
 		case "show":
 			passThrough(out, "_show", args[1:])
+		case "copy-session":
+			passThrough(out, "_copy-session", args[1:])
+		case "menubar":
+			passThrough(out, "_menubar", args[1:])
 		case "help", "--help", "-h":
 			passThrough(out, "--help", nil)
 		default:
@@ -191,6 +202,33 @@ var showCmd = &cobra.Command{
 	RunE:  runShow,
 }
 
+var copySessionCmd = &cobra.Command{
+	Use:   "_copy-session <session> <profile>",
+	Short: "Copy a Claude Code session into another profile",
+	Args:  usageArgs(cobra.ExactArgs(2), "uso copy-session <session> <profile> [--from <profile>]"),
+	RunE:  runCopySession,
+}
+
+var menubarCmd = &cobra.Command{
+	Use:   "_menubar",
+	Short: "Print a SwiftBar plugin that lists recent Claude Code sessions",
+	Args:  usageArgs(cobra.NoArgs, "uso menubar [--claude-flags <flags>]"),
+	RunE:  runMenubar,
+}
+
+var swiftbarCmd = &cobra.Command{
+	Use:    "_swiftbar <plugin> [copy <profile> <id>]",
+	Short:  "Print the menu, or copy a session's resume command (run by the plugin)",
+	Hidden: true,
+	Args: cobra.MatchAll(cobra.RangeArgs(1, 4), func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 && len(args) != 4 {
+			return fmt.Errorf("usage: uso _swiftbar <plugin> [copy <profile> <id>]")
+		}
+		return nil
+	}),
+	RunE: runSwiftbar,
+}
+
 var completionsCmd = &cobra.Command{
 	Use:    "completions",
 	Short:  "Completion helpers",
@@ -239,10 +277,13 @@ func init() {
 
 	addProfileCmd.Flags().String("share", "", "share settings, skills, plugins and project memory with this profile")
 
+	copySessionCmd.Flags().String("from", "", "the profile to copy from, when the session is in several")
+	menubarCmd.Flags().String("claude-flags", "", "options to add to the claude command that a click copies")
+
 	completionsCmd.AddCommand(completionsProfilesCmd)
 
 	rootCmd.AddCommand(hookCmd, evalCmd, initCmd, listCmd, statusCmd,
-		addToolCmd, addProfileCmd, setCmd, showCmd, completionsCmd)
+		addToolCmd, addProfileCmd, setCmd, showCmd, copySessionCmd, menubarCmd, swiftbarCmd, completionsCmd)
 }
 
 // Execute runs the root command.
