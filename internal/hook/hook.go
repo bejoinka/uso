@@ -3,6 +3,7 @@ package hook
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -17,21 +18,24 @@ func ShellEscape(s string) string {
 
 // Zsh outputs the shell code for eval "$(uso hook zsh)".
 func Zsh() string {
-	return shellHook("zsh", binPath())
+	return shellHook("zsh", BinPath())
 }
 
 // Bash outputs the shell code for eval "$(uso hook bash)".
 func Bash() string {
-	return shellHook("bash", binPath())
+	return shellHook("bash", BinPath())
 }
 
-// binPath returns the path of the running binary, with symlinks resolved
-// (e.g., Homebrew bin -> cellar).
-func binPath() string {
-	bin, _ := os.Executable()
-	if resolved, err := filepath.EvalSymlinks(bin); err == nil {
-		bin = resolved
+// BinPath returns the path to call this binary by: the one it was started
+// by, such as Homebrew's link /opt/homebrew/bin/uso. Not the versioned
+// Cellar path that link leads to, which the next upgrade removes.
+func BinPath() string {
+	if p, err := exec.LookPath(os.Args[0]); err == nil {
+		if abs, err := filepath.Abs(p); err == nil {
+			return abs
+		}
 	}
+	bin, _ := os.Executable()
 	return bin
 }
 

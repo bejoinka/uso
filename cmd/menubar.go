@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -42,14 +41,7 @@ exec '%s' _swiftbar "$0" "$@"
 
 func runMenubar(cmd *cobra.Command, args []string) error {
 	flags, _ := cmd.Flags().GetString("claude-flags")
-	// The shell function runs the binary by its full path, so this is the
-	// path to call it by. Keep Homebrew's link rather than resolving it to a
-	// versioned path that the next upgrade removes.
-	self, err := filepath.Abs(os.Args[0])
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), menubarPlugin, hook.ShellEscape(flags), hook.ShellEscape(self))
+	fmt.Fprintf(cmd.OutOrStdout(), menubarPlugin, hook.ShellEscape(flags), hook.ShellEscape(hook.BinPath()))
 	return nil
 }
 

@@ -217,3 +217,26 @@ func TestTitleAndColorReachTheTerminalVerbatim(t *testing.T) {
 		}
 	}
 }
+
+// Homebrew runs uso through a link, /opt/homebrew/bin/uso, into a versioned
+// directory that the next upgrade removes. The hook must call the link, or
+// every open shell's uso breaks after an upgrade.
+func TestHookCallsUsoByTheLinkItRanThrough(t *testing.T) {
+	dir := t.TempDir()
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "uso-link")
+	if err := os.Symlink(self, link); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	args := os.Args
+	t.Cleanup(func() { os.Args = args })
+	os.Args = append([]string{"uso-link"}, args[1:]...)
+
+	if got := Zsh(); !strings.Contains(got, `uso() { eval "$(`+link+` eval "$@")"; }`) {
+		t.Errorf("hook calls uso by another path, want %s:\n%s", link, got)
+	}
+}
